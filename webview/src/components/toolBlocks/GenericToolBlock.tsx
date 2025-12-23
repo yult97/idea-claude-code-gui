@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput } from '../../types';
-import { openFile } from '../../utils/bridge';
+import { openFile, refreshFile } from '../../utils/bridge';
 import { formatParamValue, getFileName, truncate } from '../../utils/helpers';
-import { getFileIcon } from '../../utils/fileIcons';
-import { icon_folder } from '../../utils/icons';
+import { getFileIcon, getFolderIcon } from '../../utils/fileIcons';
 
 const CODICON_MAP: Record<string, string> = {
   read: 'codicon-eye',
@@ -104,12 +103,23 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
   const isMcpTool = lowerName.startsWith('mcp__');
   const isCollapsible = ['grep', 'glob', 'write', 'save-file'].includes(lowerName) || isMcpTool;
   const [expanded, setExpanded] = useState(false);
+  const hasRefreshed = useRef(false);
+
+  const filePath = input ? pickFilePath(input) : undefined;
+
+  // Auto-refresh file in IDEA when the component mounts for file-modifying tools
+  const isFileModifyingTool = ['write', 'write_to_file', 'save-file', 'notebook_edit'].includes(lowerName);
+  useEffect(() => {
+    if (filePath && isFileModifyingTool && !hasRefreshed.current) {
+      hasRefreshed.current = true;
+      refreshFile(filePath);
+    }
+  }, [filePath, isFileModifyingTool]);
 
   if (!input) {
     return null;
   }
 
-  const filePath = pickFilePath(input);
   const displayName = getToolDisplayName(t, name);
   const codicon = CODICON_MAP[(name ?? '').toLowerCase()] ?? 'codicon-tools';
 
@@ -130,10 +140,27 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
 
   const shouldShowDetails = otherParams.length > 0 && (!isCollapsible || expanded);
 
+  // 检查是否为特殊文件（没有扩展名但确实是文件）
+  const isSpecialFile = (fileName: string): boolean => {
+    const specialFiles = [
+      'makefile', 'dockerfile', 'jenkinsfile', 'vagrantfile',
+      'gemfile', 'rakefile', 'procfile', 'guardfile',
+      'license', 'licence', 'readme', 'changelog',
+      'gradlew', 'cname', 'authors', 'contributors'
+    ];
+    return specialFiles.includes(fileName.toLowerCase());
+  };
+
+  // 判断是否为目录：以 / 结尾、是 . 或 ..、或者文件名不包含扩展名（且不是特殊文件）
+  const fileName = filePath ? getFileName(filePath) : '';
+  const isDirectoryPath = filePath && (
+    filePath.endsWith('/') ||
+    filePath === '.' ||
+    filePath === '..' ||
+    (!fileName.includes('.') && !isSpecialFile(fileName))
+  );
   // 判断是否为文件路径（非目录）
-  const isFilePath = filePath && !filePath.endsWith('/') && filePath !== '.';
-  // 判断是否为目录
-  const isDirectoryPath = filePath && (filePath.endsWith('/') || filePath === '.');
+  const isFilePath = filePath && !isDirectoryPath;
 
   const handleFileClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -145,8 +172,14 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
   const getFileIconSvg = (path?: string) => {
     if (!path) return '';
     const name = getFileName(path);
-    const extension = name.indexOf('.') !== -1 ? name.split('.').pop() : '';
-    return getFileIcon(extension, name);
+
+    if (isDirectoryPath) {
+      // 对于目录，使用 getFolderIcon 获取彩色文件夹图标
+      return getFolderIcon(name);
+    } else {
+      const extension = name.indexOf('.') !== -1 ? name.split('.').pop() : '';
+      return getFileIcon(extension, name);
+    }
   };
 
   return (
@@ -173,17 +206,10 @@ const GenericToolBlock = ({ name, input }: GenericToolBlockProps) => {
                 style={(isFilePath || isDirectoryPath) ? { display: 'flex', alignItems: 'center' } : undefined}
               >
                 {(isFilePath || isDirectoryPath) && (
-                   isDirectoryPath ? (
-                     <span 
-                        style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
-                        dangerouslySetInnerHTML={{ __html: icon_folder }} 
-                     />
-                   ) : (
-                     <span 
-                        style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }} 
-                        dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }} 
-                     />
-                   )
+                   <span
+                      style={{ marginRight: '4px', display: 'flex', alignItems: 'center', width: '16px', height: '16px' }}
+                      dangerouslySetInnerHTML={{ __html: getFileIconSvg(filePath) }}
+                   />
                 )}
                 {summary}
               </span>

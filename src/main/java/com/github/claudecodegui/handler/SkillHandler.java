@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -20,6 +21,8 @@ import java.util.concurrent.CompletableFuture;
  * Skill 管理消息处理器
  */
 public class SkillHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(SkillHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "get_all_skills",
@@ -74,13 +77,12 @@ public class SkillHandler extends BaseMessageHandler {
             Gson gson = new Gson();
             String skillsJson = gson.toJson(skills);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateSkills", escapeJs(skillsJson));
             });
         } catch (Exception e) {
-            System.err.println("[SkillHandler] Failed to get all skills: " + e.getMessage());
-            e.printStackTrace();
-            SwingUtilities.invokeLater(() -> {
+            LOG.error("[SkillHandler] Failed to get all skills: " + e.getMessage(), e);
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateSkills", escapeJs("{\"global\":{},\"local\":{}}"));
             });
         }
@@ -95,7 +97,7 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 JFileChooser chooser = new JFileChooser();
                 chooser.setDialogTitle("选择 Skill 文件或文件夹");
                 chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
@@ -115,15 +117,15 @@ public class SkillHandler extends BaseMessageHandler {
                             JsonObject importResult = SkillService.importSkills(paths, scope, workspaceRoot);
                             String resultJson = new Gson().toJson(importResult);
 
-                            SwingUtilities.invokeLater(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
                                 callJavaScript("window.skillImportResult", escapeJs(resultJson));
                             });
                         } catch (Exception e) {
-                            System.err.println("[SkillHandler] Import skill failed: " + e.getMessage());
+                            LOG.error("[SkillHandler] Import skill failed: " + e.getMessage(), e);
                             JsonObject errorResult = new JsonObject();
                             errorResult.addProperty("success", false);
                             errorResult.addProperty("error", e.getMessage());
-                            SwingUtilities.invokeLater(() -> {
+                            ApplicationManager.getApplication().invokeLater(() -> {
                                 callJavaScript("window.skillImportResult", escapeJs(new Gson().toJson(errorResult)));
                             });
                         }
@@ -131,8 +133,7 @@ public class SkillHandler extends BaseMessageHandler {
                 }
             });
         } catch (Exception e) {
-            System.err.println("[SkillHandler] Failed to handle import skill: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SkillHandler] Failed to handle import skill: " + e.getMessage(), e);
         }
     }
 
@@ -151,16 +152,15 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject result = SkillService.deleteSkill(skillName, scope, enabled, workspaceRoot);
             String resultJson = gson.toJson(result);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillDeleteResult", escapeJs(resultJson));
             });
         } catch (Exception e) {
-            System.err.println("[SkillHandler] Failed to delete skill: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SkillHandler] Failed to delete skill: " + e.getMessage(), e);
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillDeleteResult", escapeJs(new Gson().toJson(errorResult)));
             });
         }
@@ -181,16 +181,15 @@ public class SkillHandler extends BaseMessageHandler {
             JsonObject result = SkillService.toggleSkill(skillName, scope, currentEnabled, workspaceRoot);
             String resultJson = gson.toJson(result);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillToggleResult", escapeJs(resultJson));
             });
         } catch (Exception e) {
-            System.err.println("[SkillHandler] Failed to toggle skill: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SkillHandler] Failed to toggle skill: " + e.getMessage(), e);
             JsonObject errorResult = new JsonObject();
             errorResult.addProperty("success", false);
             errorResult.addProperty("error", e.getMessage());
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.skillToggleResult", escapeJs(new Gson().toJson(errorResult)));
             });
         }
@@ -232,14 +231,13 @@ public class SkillHandler extends BaseMessageHandler {
                     if (virtualFile != null) {
                         FileEditorManager.getInstance(context.getProject()).openFile(virtualFile, true);
                     } else {
-                        System.err.println("[SkillHandler] Cannot find file: " + fileToOpen);
+                        LOG.error("[SkillHandler] Cannot find file: " + fileToOpen);
                     }
                 })
                 .submit(AppExecutorUtil.getAppExecutorService());
 
         } catch (Exception e) {
-            System.err.println("[SkillHandler] Failed to open skill: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[SkillHandler] Failed to open skill: " + e.getMessage(), e);
         }
     }
 }

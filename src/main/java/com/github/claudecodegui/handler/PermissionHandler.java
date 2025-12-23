@@ -4,6 +4,8 @@ import com.github.claudecodegui.permission.PermissionRequest;
 import com.github.claudecodegui.permission.PermissionService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
@@ -18,6 +20,8 @@ import java.util.concurrent.TimeUnit;
  * 处理权限对话框显示和决策
  */
 public class PermissionHandler extends BaseMessageHandler {
+
+    private static final Logger LOG = Logger.getInstance(PermissionHandler.class);
 
     private static final String[] SUPPORTED_TYPES = {
         "permission_decision"
@@ -49,8 +53,8 @@ public class PermissionHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         if ("permission_decision".equals(type)) {
-            System.out.println("[PERM_DEBUG][BRIDGE_RECV] Received permission_decision from JS");
-            System.out.println("[PERM_DEBUG][BRIDGE_RECV] Content: " + content);
+            LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Received permission_decision from JS");
+            LOG.debug("[PERM_DEBUG][BRIDGE_RECV] Content: " + content);
             handlePermissionDecision(content);
             return true;
         }
@@ -64,8 +68,8 @@ public class PermissionHandler extends BaseMessageHandler {
         String channelId = UUID.randomUUID().toString();
         CompletableFuture<Integer> future = new CompletableFuture<>();
 
-        System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] Starting showFrontendPermissionDialog");
-        System.out.println("[PERM_DEBUG][FRONTEND_DIALOG] channelId=" + channelId + ", toolName=" + toolName);
+        LOG.debug("[PERM_DEBUG][FRONTEND_DIALOG] Starting showFrontendPermissionDialog");
+        LOG.debug("[PERM_DEBUG][FRONTEND_DIALOG] channelId=" + channelId + ", toolName=" + toolName);
 
         pendingPermissionRequests.put(channelId, future);
 
@@ -79,7 +83,7 @@ public class PermissionHandler extends BaseMessageHandler {
             String requestJson = gson.toJson(requestData);
             String escapedJson = escapeJs(requestJson);
 
-            SwingUtilities.invokeLater(() -> {
+            ApplicationManager.getApplication().invokeLater(() -> {
                 String jsCode = "(function retryShowDialog(retries) { " +
                     "  if (window.showPermissionDialog) { " +
                     "    window.showPermissionDialog('" + escapedJson + "'); " +
@@ -102,7 +106,7 @@ public class PermissionHandler extends BaseMessageHandler {
             });
 
         } catch (Exception e) {
-            System.err.println("[PERM_DEBUG][FRONTEND_DIALOG] ERROR: " + e.getMessage());
+            LOG.error("[PERM_DEBUG][FRONTEND_DIALOG] ERROR: " + e.getMessage(), e);
             pendingPermissionRequests.remove(channelId);
             future.complete(PermissionService.PermissionResponse.DENY.getValue());
         }
@@ -114,7 +118,7 @@ public class PermissionHandler extends BaseMessageHandler {
      * 显示权限请求对话框（来自 PermissionRequest）
      */
     public void showPermissionDialog(PermissionRequest request) {
-        System.out.println("[PermissionHandler] 显示权限请求对话框: " + request.getToolName());
+        LOG.info("[PermissionHandler] 显示权限请求对话框: " + request.getToolName());
 
         try {
             Gson gson = new Gson();
@@ -135,7 +139,7 @@ public class PermissionHandler extends BaseMessageHandler {
             // 获取权限请求所属的项目
             Project targetProject = request.getProject();
             if (targetProject == null) {
-                System.err.println("[PermissionHandler] 警告: PermissionRequest 没有关联的 Project，使用当前 context 的窗口");
+                LOG.warn("[PermissionHandler] 警告: PermissionRequest 没有关联的 Project，使用当前 context 的窗口");
                 targetProject = this.context.getProject();
             }
 
@@ -144,7 +148,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 com.github.claudecodegui.ClaudeSDKToolWindow.getChatWindow(targetProject);
 
             if (targetWindow == null) {
-                System.err.println("[PermissionHandler] 错误: 找不到项目 " + targetProject.getName() + " 的窗口实例");
+                LOG.error("[PermissionHandler] 错误: 找不到项目 " + targetProject.getName() + " 的窗口实例");
                 // 如果找不到目标窗口，拒绝权限请求
                 this.context.getSession().handlePermissionDecision(
                     request.getChannelId(),
@@ -164,7 +168,7 @@ public class PermissionHandler extends BaseMessageHandler {
             targetWindow.executeJavaScriptCode(jsCode);
 
         } catch (Exception e) {
-            System.err.println("[PermissionHandler] 显示权限弹窗失败: " + e.getMessage());
+            LOG.error("[PermissionHandler] 显示权限弹窗失败: " + e.getMessage(), e);
             this.context.getSession().handlePermissionDecision(
                 request.getChannelId(),
                 false,
@@ -179,7 +183,7 @@ public class PermissionHandler extends BaseMessageHandler {
      * 处理来自 JavaScript 的权限决策消息
      */
     private void handlePermissionDecision(String jsonContent) {
-        System.out.println("[PERM_DEBUG][HANDLE_DECISION] Received decision from JS: " + jsonContent);
+        LOG.debug("[PERM_DEBUG][HANDLE_DECISION] Received decision from JS: " + jsonContent);
         try {
             Gson gson = new Gson();
             JsonObject decision = gson.fromJson(jsonContent, JsonObject.class);
@@ -220,8 +224,7 @@ public class PermissionHandler extends BaseMessageHandler {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[PERM_DEBUG][HANDLE_DECISION] ERROR: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("[PERM_DEBUG][HANDLE_DECISION] ERROR: " + e.getMessage(), e);
         }
     }
 

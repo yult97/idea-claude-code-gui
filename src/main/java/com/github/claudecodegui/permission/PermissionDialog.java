@@ -1,8 +1,10 @@
 package com.github.claudecodegui.permission;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.jcef.JBCefBrowser;
+import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.intellij.ui.jcef.JBCefBrowserBase;
 import com.intellij.ui.jcef.JBCefJSQuery;
 import com.google.gson.Gson;
@@ -22,10 +24,13 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import com.intellij.openapi.diagnostic.Logger;
 /**
  * 权限请求对话框
  */
 public class PermissionDialog extends DialogWrapper {
+    private static final Logger LOG = Logger.getInstance(PermissionDialog.class);
+
     private final JBCefBrowser browser;
     private final JBCefJSQuery jsQuery;
     private final PermissionRequest request;
@@ -55,7 +60,7 @@ public class PermissionDialog extends DialogWrapper {
         setResizable(false);
 
         // 创建 JCEF 浏览器
-        this.browser = new JBCefBrowser();
+        this.browser = JBCefBrowserFactory.create();
         JBCefBrowserBase browserBase = this.browser;
         this.jsQuery = JBCefJSQuery.create(browserBase);
 
@@ -67,7 +72,7 @@ public class PermissionDialog extends DialogWrapper {
                 if (decisionCallback != null) {
                     decisionCallback.accept(decision);
                 }
-                SwingUtilities.invokeLater(() -> close(0));
+                ApplicationManager.getApplication().invokeLater(() -> close(0));
                 return null;
             }
             return null;
@@ -110,7 +115,7 @@ public class PermissionDialog extends DialogWrapper {
             browser.loadHTML(html);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
             browser.loadHTML("<html><body><h3>加载权限对话框失败</h3></body></html>");
         }
     }

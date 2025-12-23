@@ -4,6 +4,7 @@ import com.google.gson.*;
 import com.github.claudecodegui.permission.PermissionDialog;
 import com.github.claudecodegui.permission.PermissionRequest;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 
 import javax.swing.*;
@@ -19,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class ToolInterceptor {
 
+    private static final Logger LOG = Logger.getInstance(ToolInterceptor.class);
     private final Project project;
     private final Set<String> controlledTools;
 
@@ -68,7 +70,7 @@ public class ToolInterceptor {
         AtomicBoolean userApproved = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
 
-        SwingUtilities.invokeLater(() -> {
+        ApplicationManager.getApplication().invokeLater(() -> {
             int result = JOptionPane.showConfirmDialog(
                 null,
                 "Claude 需要执行以下操作：\n\n" +
@@ -88,11 +90,11 @@ public class ToolInterceptor {
             // 设置30秒超时，防止无限等待
             boolean responded = latch.await(30, TimeUnit.SECONDS);
             if (!responded) {
-                System.err.println("权限请求超时，自动拒绝");
+                LOG.warn("权限请求超时，自动拒绝");
                 return null; // 超时视为拒绝
             }
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            LOG.error("Error occurred", e);
             return null;
         }
 
@@ -111,7 +113,7 @@ public class ToolInterceptor {
     public CompletableFuture<Boolean> showDetailedPermissionDialog(String toolName, Map<String, Object> inputs) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
-        SwingUtilities.invokeLater(() -> {
+        ApplicationManager.getApplication().invokeLater(() -> {
             // 创建权限请求
             PermissionRequest request = new PermissionRequest(
                 UUID.randomUUID().toString(),
